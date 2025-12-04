@@ -1,0 +1,19 @@
+import { router } from "./_core/trpc";
+import { authRouter } from "./_core/authRouter";
+import { projectRouter } from "./_core/projectRouter";
+import { systemRouter } from "./_core/systemRouter";
+import { tagRouter } from "./_core/tagRouter";
+import { taskRouter } from "./_core/taskRouter";
+import { notificationRouter } from "./_core/notificationRouter";
+
+
+export const appRouter = router({
+  auth: authRouter,
+  project: projectRouter,
+  system: systemRouter,
+  tag: tagRouter,
+  task: taskRouter,
+  notification: notificationRouter,
+});
+
+export type AppRouter = typeof appRouter;

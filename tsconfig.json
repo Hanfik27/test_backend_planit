@@ -1,0 +1,21 @@
+{
+  "include": ["./_core/**/*.ts", "./db.ts", "./storage.ts", "./routers.ts", "../shared/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.tsbuildinfo",
+    "paths": {
+      "@shared/*": ["../shared/*"]
+    },
+    "lib": ["ESNext"],
+    "typeRoots": ["node_modules/@types", "../types"]
+  }
+}
