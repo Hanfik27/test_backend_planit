@@ -1,6 +1,6 @@
 // server/_core/progress.ts
 
-import { tasks, projects } from "../../drizzle/schema";
+import { tasks, projects } from "../drizzle/schema";
 import { sql, eq, and } from "drizzle-orm";
 
 // mapping score untuk status task

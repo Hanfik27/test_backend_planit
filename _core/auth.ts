@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { COOKIE_NAME } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { getDb } from "../db";
-import { users } from "../../drizzle/schema";
+import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 export const authRouter = router({
@@ -48,11 +48,9 @@ export const authRouter = router({
         .returning();
 
       // Buat JWT token
-      const token = jwt.sign(
-        { id: newUser.id },
-        process.env.JWT_SECRET!,
-        { expiresIn: "7d" }
-      );
+      const token = jwt.sign({ id: newUser.id }, process.env.JWT_SECRET!, {
+        expiresIn: "7d",
+      });
 
       // Set cookie (ini cara yang benar di Express + tRPC)
       ctx.res.cookie(COOKIE_NAME, token, getSessionCookieOptions(ctx.req));
@@ -94,11 +92,9 @@ export const authRouter = router({
         throw new Error("Email atau password salah");
       }
 
-      const token = jwt.sign(
-        { id: user.id },
-        process.env.JWT_SECRET!,
-        { expiresIn: "7d" }
-      );
+      const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET!, {
+        expiresIn: "7d",
+      });
 
       ctx.res.cookie(COOKIE_NAME, token, getSessionCookieOptions(ctx.req));
 

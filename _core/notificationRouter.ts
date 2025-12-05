@@ -1,10 +1,9 @@
 import { createTRPCRouter, protectedProcedure } from "./trpc";
 import { z } from "zod";
-import { userNotificationSettings } from "../../drizzle/schema";
+import { userNotificationSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 export const notificationRouter = createTRPCRouter({
-
   // ----------------------------------------------------
   // GET USER NOTIFICATION SETTINGS
   // ----------------------------------------------------

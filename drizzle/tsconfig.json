@@ -1,0 +1,18 @@
+{
+  "include": ["*.ts"],
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../server/node_modules/.tsbuildinfo",
+    "lib": ["ESNext"],
+    "typeRoots": ["../server/node_modules/@types"]
+  }
+}

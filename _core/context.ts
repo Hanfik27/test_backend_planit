@@ -1,7 +1,7 @@
 // _core/context.ts
 
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
-import type { User } from "../../drizzle/schema";
+import type { User } from "../drizzle/schema";
 import type { DB } from "../db";
 
 import jwt from "jsonwebtoken";
@@ -44,10 +44,10 @@ export async function createContext(
 
       // Lookup user from DB
       const found = await db.query.users.findFirst({
-        where: (tbl, { eq }) => eq(tbl.id, decoded.id),
+        where: (tbl: any, { eq }: any) => eq(tbl.id, decoded.id),
       });
 
-      user = found ?? null;
+      user = found || null;
     } catch {
       user = null; // invalid token
     }

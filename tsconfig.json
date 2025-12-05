@@ -1,5 +1,12 @@
 {
-  "include": ["./_core/**/*.ts", "./db.ts", "./storage.ts", "./routers.ts", "../shared/**/*.ts"],
+  "include": [
+    "./_core/**/*.ts",
+    "./db.ts",
+    "./storage.ts",
+    "./routers.ts",
+    "./drizzle/**/*.ts",
+    "../shared/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"],
   "compilerOptions": {
     "target": "ESNext",

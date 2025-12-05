@@ -1,12 +1,11 @@
 // server/_core/tagRouter.ts — FINAL FIXED & CLEAN
 import { createTRPCRouter, protectedProcedure } from "./trpc";
 import { z } from "zod";
-import { tags, taskTags, tasks } from "../../drizzle/schema";
+import { tags, taskTags, tasks } from "../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const tagRouter = createTRPCRouter({
-
   // -----------------------------------------------------
   // GET ALL TAGS + USAGE COUNT (REAL)
   // -----------------------------------------------------
@@ -32,23 +31,21 @@ export const tagRouter = createTRPCRouter({
       .orderBy(desc(tags.createdAt));
   }),
 
-
   getById: protectedProcedure
-  .input(z.object({ id: z.number() }))
-  .query(async ({ ctx, input }) => {
-    const { id } = input;
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const { id } = input;
 
-    const [tag] = await ctx.db
-      .select()
-      .from(tags)
-      .where(and(eq(tags.id, id), eq(tags.userId, ctx.user.id)))
-      .limit(1);
+      const [tag] = await ctx.db
+        .select()
+        .from(tags)
+        .where(and(eq(tags.id, id), eq(tags.userId, ctx.user.id)))
+        .limit(1);
 
-    if (!tag) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!tag) throw new TRPCError({ code: "NOT_FOUND" });
 
-    return tag;
-  }),
-
+      return tag;
+    }),
 
   // -----------------------------------------------------
   // CREATE TAG
@@ -191,7 +188,7 @@ export const tagRouter = createTRPCRouter({
 
       if (existing) return { success: true };
 
-      await ctx.db.transaction(async (tx) => {
+      await ctx.db.transaction(async tx => {
         await tx.insert(taskTags).values({ taskId, tagId });
 
         // increase usageCount
@@ -225,7 +222,7 @@ export const tagRouter = createTRPCRouter({
 
       if (!existing) return { success: true };
 
-      await ctx.db.transaction(async (tx) => {
+      await ctx.db.transaction(async tx => {
         await tx
           .delete(taskTags)
           .where(and(eq(taskTags.taskId, taskId), eq(taskTags.tagId, tagId)));

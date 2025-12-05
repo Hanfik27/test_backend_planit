@@ -6,7 +6,7 @@ import { recalcProjectProgress } from "./progress";
 import { sendEmail } from "./email"; // <= EMAIL ADDED
 import { z } from "zod";
 import { eq, and, asc, sql } from "drizzle-orm";
-import { projects, tasks, taskTags, tags } from "../../drizzle/schema";
+import { projects, tasks, taskTags, tags } from "../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 
 /* -----------------------------------------------------
@@ -91,7 +91,12 @@ export const taskRouter = createTRPCRouter({
       const taskList = await ctx.db
         .select()
         .from(tasks)
-        .where(and(eq(tasks.projectId, input.projectId), eq(tasks.userId, ctx.user.id)))
+        .where(
+          and(
+            eq(tasks.projectId, input.projectId),
+            eq(tasks.userId, ctx.user.id)
+          )
+        )
         .orderBy(asc(tasks.position));
 
       const result = [];
@@ -131,7 +136,12 @@ export const taskRouter = createTRPCRouter({
       const [projectExists] = await ctx.db
         .select()
         .from(projects)
-        .where(and(eq(projects.id, input.projectId), eq(projects.userId, ctx.user.id)));
+        .where(
+          and(
+            eq(projects.id, input.projectId),
+            eq(projects.userId, ctx.user.id)
+          )
+        );
 
       if (!projectExists) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -140,7 +150,12 @@ export const taskRouter = createTRPCRouter({
       const last = await ctx.db
         .select({ max: sql<number>`max(${tasks.position})` })
         .from(tasks)
-        .where(and(eq(tasks.projectId, input.projectId), eq(tasks.status, input.status)));
+        .where(
+          and(
+            eq(tasks.projectId, input.projectId),
+            eq(tasks.status, input.status)
+          )
+        );
 
       const nextPos = (last[0]?.max ?? -1) + 1;
 
@@ -159,9 +174,9 @@ export const taskRouter = createTRPCRouter({
         .returning();
 
       if (input.tagIds?.length) {
-        await ctx.db.insert(taskTags).values(
-          input.tagIds.map((tagId) => ({ taskId: created.id, tagId }))
-        );
+        await ctx.db
+          .insert(taskTags)
+          .values(input.tagIds.map(tagId => ({ taskId: created.id, tagId })));
       }
 
       await recalcProjectProgress(ctx.db, input.projectId, ctx.user.id);
@@ -192,24 +207,36 @@ export const taskRouter = createTRPCRouter({
 
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
 
-      await ctx.db.transaction(async (tx) => {
+      await ctx.db.transaction(async tx => {
         const updateData: Record<string, any> = { updatedAt: new Date() };
 
         if (input.title !== undefined) updateData.title = input.title;
-        if (input.description !== undefined) updateData.description = input.description ?? null;
+        if (input.description !== undefined)
+          updateData.description = input.description ?? null;
         if (input.priority !== undefined) updateData.priority = input.priority;
 
         let targetProjectId = existing.projectId;
         let targetStatus = existing.status;
 
-        if (input.projectId !== undefined && input.projectId !== existing.projectId) {
+        if (
+          input.projectId !== undefined &&
+          input.projectId !== existing.projectId
+        ) {
           const [projExists] = await tx
             .select()
             .from(projects)
-            .where(and(eq(projects.id, input.projectId), eq(projects.userId, ctx.user.id)));
+            .where(
+              and(
+                eq(projects.id, input.projectId),
+                eq(projects.userId, ctx.user.id)
+              )
+            );
 
           if (!projExists) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Target project not found" });
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Target project not found",
+            });
           }
 
           targetProjectId = input.projectId;
@@ -228,7 +255,12 @@ export const taskRouter = createTRPCRouter({
           const last = await tx
             .select({ max: sql<number>`max(${tasks.position})` })
             .from(tasks)
-            .where(and(eq(tasks.projectId, targetProjectId), eq(tasks.status, targetStatus)));
+            .where(
+              and(
+                eq(tasks.projectId, targetProjectId),
+                eq(tasks.status, targetStatus)
+              )
+            );
 
           updateData.status = targetStatus;
           updateData.position = (last[0]?.max ?? -1) + 1;
@@ -246,9 +278,9 @@ export const taskRouter = createTRPCRouter({
           await tx.delete(taskTags).where(eq(taskTags.taskId, input.id));
 
           if (input.tagIds.length > 0) {
-            await tx.insert(taskTags).values(
-              input.tagIds.map((tagId) => ({ taskId: input.id, tagId }))
-            );
+            await tx
+              .insert(taskTags)
+              .values(input.tagIds.map(tagId => ({ taskId: input.id, tagId })));
           }
         }
       });
@@ -256,7 +288,10 @@ export const taskRouter = createTRPCRouter({
       try {
         await recalcProjectProgress(ctx.db, existing.projectId, ctx.user.id);
 
-        if (input.projectId !== undefined && input.projectId !== existing.projectId) {
+        if (
+          input.projectId !== undefined &&
+          input.projectId !== existing.projectId
+        ) {
           await recalcProjectProgress(ctx.db, input.projectId, ctx.user.id);
         }
       } catch (err) {
@@ -327,9 +362,7 @@ export const taskRouter = createTRPCRouter({
         })
         .from(taskTags)
         .innerJoin(tasks, eq(taskTags.taskId, tasks.id))
-        .where(
-          and(eq(taskTags.tagId, tagId), eq(tasks.userId, ctx.user.id))
-        );
+        .where(and(eq(taskTags.tagId, tagId), eq(tasks.userId, ctx.user.id)));
 
       return rows;
     }),
@@ -346,13 +379,15 @@ export const taskRouter = createTRPCRouter({
         const [projectExists] = await ctx.db
           .select()
           .from(projects)
-          .where(and(eq(projects.id, projectId), eq(projects.userId, ctx.user.id)));
+          .where(
+            and(eq(projects.id, projectId), eq(projects.userId, ctx.user.id))
+          );
 
         if (!projectExists) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
 
-        const ids = items.map((i) => i.id);
+        const ids = items.map(i => i.id);
 
         const dbTasks = await ctx.db
           .select()
@@ -369,7 +404,7 @@ export const taskRouter = createTRPCRouter({
           throw new TRPCError({ code: "FORBIDDEN" });
         }
 
-        await ctx.db.transaction(async (tx) => {
+        await ctx.db.transaction(async tx => {
           for (const item of items) {
             await tx
               .update(tasks)

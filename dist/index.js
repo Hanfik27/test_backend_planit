@@ -686,15 +686,105 @@ async function sendEmail(to, subject, html) {
 
 // _core/taskRouter.ts
 import { z as z2 } from "zod";
-import { eq as eq4, and as and2, asc, sql as sql3 } from "drizzle-orm";
+import { eq as eq4, and as and2, asc, sql as sql4 } from "drizzle-orm";
+
+// drizzle/schema.ts
+import {
+  pgTable as pgTable2,
+  serial as serial2,
+  integer as integer2,
+  varchar as varchar2,
+  text as text2,
+  timestamp as timestamp2,
+  pgEnum as pgEnum2,
+  primaryKey as primaryKey2
+} from "drizzle-orm/pg-core";
+import { sql as sql3 } from "drizzle-orm";
+var roleEnum2 = pgEnum2("role", ["user", "admin"]);
+var priorityEnum2 = pgEnum2("priority", ["low", "medium", "high"]);
+var statusEnum2 = pgEnum2("status", ["pending", "in-progress", "completed"]);
+var projectStatusEnum2 = pgEnum2("project_status", [
+  "active",
+  "completed",
+  "archived"
+]);
+var users2 = pgTable2("users", {
+  id: serial2("id").primaryKey(),
+  openId: varchar2("open_id", { length: 64 }).unique(),
+  name: text2("name"),
+  email: varchar2("email", { length: 320 }).unique().notNull(),
+  password: varchar2("password", { length: 255 }),
+  loginMethod: varchar2("login_method", { length: 64 }).default("email"),
+  role: roleEnum2("role").default("user").notNull(),
+  createdAt: timestamp2("created_at").defaultNow().notNull(),
+  updatedAt: timestamp2("updated_at").defaultNow().notNull(),
+  lastSignedIn: timestamp2("last_signed_in").defaultNow().notNull()
+});
+var userNotificationSettings2 = pgTable2("user_notification_settings", {
+  id: serial2("id").primaryKey(),
+  userId: integer2("user_id").notNull().references(() => users2.id, { onDelete: "cascade" }),
+  emailNotifications: integer2("email_notifications").notNull().default(1),
+  // 1 = ON, 0 = OFF
+  taskDueReminder: integer2("task_due_reminder").notNull().default(1),
+  newTaskAssigned: integer2("new_task_assigned").notNull().default(1),
+  marketingEmails: integer2("marketing_emails").notNull().default(0),
+  // default OFF
+  createdAt: timestamp2("created_at").defaultNow().notNull(),
+  updatedAt: timestamp2("updated_at").defaultNow().notNull().$onUpdate(() => sql3`now()`)
+});
+var projects2 = pgTable2("projects", {
+  id: serial2("id").primaryKey(),
+  userId: integer2("user_id").notNull().references(() => users2.id, { onDelete: "cascade" }),
+  name: varchar2("name", { length: 255 }).notNull(),
+  description: text2("description"),
+  status: projectStatusEnum2("status").default("active").notNull(),
+  progress: integer2("progress").default(0),
+  color: varchar2("color", { length: 50 }).default("from-blue-500 to-blue-600"),
+  createdAt: timestamp2("created_at").defaultNow().notNull(),
+  updatedAt: timestamp2("updated_at").defaultNow().notNull().$onUpdate(() => sql3`now()`)
+});
+var tags2 = pgTable2("tags", {
+  id: serial2("id").primaryKey(),
+  userId: integer2("user_id").notNull().references(() => users2.id, { onDelete: "cascade" }),
+  name: varchar2("name", { length: 50 }).notNull(),
+  description: text2("description"),
+  color: varchar2("color", { length: 50 }).default("#3b82f6"),
+  usageCount: integer2("usage_count").default(0).notNull(),
+  createdAt: timestamp2("created_at").defaultNow().notNull()
+});
+var tasks2 = pgTable2("tasks", {
+  id: serial2("id").primaryKey(),
+  userId: integer2("user_id").notNull().references(() => users2.id, { onDelete: "cascade" }),
+  projectId: integer2("project_id").notNull().references(() => projects2.id, { onDelete: "cascade" }),
+  title: varchar2("title", { length: 255 }).notNull(),
+  description: text2("description"),
+  priority: priorityEnum2("priority").notNull().default("medium"),
+  status: statusEnum2("status").notNull().default("pending"),
+  dueDate: timestamp2("due_date"),
+  position: integer2("position").notNull().default(0),
+  createdAt: timestamp2("created_at").defaultNow().notNull(),
+  updatedAt: timestamp2("updated_at").defaultNow().notNull().$onUpdate(() => sql3`now()`)
+});
+var taskTags2 = pgTable2(
+  "task_tags",
+  {
+    taskId: integer2("task_id").notNull().references(() => tasks2.id, { onDelete: "cascade" }),
+    tagId: integer2("tag_id").notNull().references(() => tags2.id, { onDelete: "cascade" })
+  },
+  (table) => ({
+    pk: primaryKey2({ columns: [table.taskId, table.tagId] })
+  })
+);
+
+// _core/taskRouter.ts
 import { TRPCError as TRPCError3 } from "@trpc/server";
 async function getFullTagsForTask(db, taskId) {
   return db.select({
-    id: tags.id,
-    name: tags.name,
-    color: tags.color,
-    description: tags.description
-  }).from(taskTags).innerJoin(tags, eq4(taskTags.tagId, tags.id)).where(eq4(taskTags.taskId, taskId));
+    id: tags2.id,
+    name: tags2.name,
+    color: tags2.color,
+    description: tags2.description
+  }).from(taskTags2).innerJoin(tags2, eq4(taskTags2.tagId, tags2.id)).where(eq4(taskTags2.taskId, taskId));
 }
 var createTaskSchema = z2.object({
   projectId: z2.number(),
@@ -730,7 +820,7 @@ var taskRouter = createTRPCRouter({
      LIST ALL TASKS
   --------------------------------------------- */
   listAll: protectedProcedure.query(async ({ ctx }) => {
-    const all = await ctx.db.select().from(tasks).where(eq4(tasks.userId, ctx.user.id)).orderBy(asc(tasks.createdAt));
+    const all = await ctx.db.select().from(tasks2).where(eq4(tasks2.userId, ctx.user.id)).orderBy(asc(tasks2.createdAt));
     const result = [];
     for (const t2 of all) {
       const tTags = await getFullTagsForTask(ctx.db, t2.id);
@@ -742,7 +832,7 @@ var taskRouter = createTRPCRouter({
      LIST BY PROJECT
   --------------------------------------------- */
   listByProject: protectedProcedure.input(z2.object({ projectId: z2.number() })).query(async ({ ctx, input }) => {
-    const taskList = await ctx.db.select().from(tasks).where(and2(eq4(tasks.projectId, input.projectId), eq4(tasks.userId, ctx.user.id))).orderBy(asc(tasks.position));
+    const taskList = await ctx.db.select().from(tasks2).where(and2(eq4(tasks2.projectId, input.projectId), eq4(tasks2.userId, ctx.user.id))).orderBy(asc(tasks2.position));
     const result = [];
     for (const t2 of taskList) {
       const tTags = await getFullTagsForTask(ctx.db, t2.id);
@@ -754,7 +844,7 @@ var taskRouter = createTRPCRouter({
      GET ONE
   --------------------------------------------- */
   getOne: protectedProcedure.input(z2.object({ id: z2.number() })).query(async ({ ctx, input }) => {
-    const [task] = await ctx.db.select().from(tasks).where(and2(eq4(tasks.id, input.id), eq4(tasks.userId, ctx.user.id)));
+    const [task] = await ctx.db.select().from(tasks2).where(and2(eq4(tasks2.id, input.id), eq4(tasks2.userId, ctx.user.id)));
     if (!task) {
       throw new TRPCError3({ code: "NOT_FOUND", message: "Task not found" });
     }
@@ -765,12 +855,12 @@ var taskRouter = createTRPCRouter({
      CREATE TASK
   --------------------------------------------- */
   create: protectedProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {
-    const [projectExists] = await ctx.db.select().from(projects).where(and2(eq4(projects.id, input.projectId), eq4(projects.userId, ctx.user.id)));
+    const [projectExists] = await ctx.db.select().from(projects2).where(and2(eq4(projects2.id, input.projectId), eq4(projects2.userId, ctx.user.id)));
     if (!projectExists) throw new TRPCError3({ code: "NOT_FOUND" });
     const due = input.dueDate ? new Date(input.dueDate) : null;
-    const last = await ctx.db.select({ max: sql3`max(${tasks.position})` }).from(tasks).where(and2(eq4(tasks.projectId, input.projectId), eq4(tasks.status, input.status)));
+    const last = await ctx.db.select({ max: sql4`max(${tasks2.position})` }).from(tasks2).where(and2(eq4(tasks2.projectId, input.projectId), eq4(tasks2.status, input.status)));
     const nextPos = (last[0]?.max ?? -1) + 1;
-    const [created] = await ctx.db.insert(tasks).values({
+    const [created] = await ctx.db.insert(tasks2).values({
       projectId: input.projectId,
       userId: ctx.user.id,
       title: input.title,
@@ -781,7 +871,7 @@ var taskRouter = createTRPCRouter({
       position: nextPos
     }).returning();
     if (input.tagIds?.length) {
-      await ctx.db.insert(taskTags).values(
+      await ctx.db.insert(taskTags2).values(
         input.tagIds.map((tagId) => ({ taskId: created.id, tagId }))
       );
     }
@@ -798,7 +888,7 @@ var taskRouter = createTRPCRouter({
      UPDATE TASK
   --------------------------------------------- */
   update: protectedProcedure.input(updateTaskSchema).mutation(async ({ ctx, input }) => {
-    const [existing] = await ctx.db.select().from(tasks).where(and2(eq4(tasks.id, input.id), eq4(tasks.userId, ctx.user.id)));
+    const [existing] = await ctx.db.select().from(tasks2).where(and2(eq4(tasks2.id, input.id), eq4(tasks2.userId, ctx.user.id)));
     if (!existing) throw new TRPCError3({ code: "NOT_FOUND" });
     await ctx.db.transaction(async (tx) => {
       const updateData = { updatedAt: /* @__PURE__ */ new Date() };
@@ -808,7 +898,7 @@ var taskRouter = createTRPCRouter({
       let targetProjectId = existing.projectId;
       let targetStatus = existing.status;
       if (input.projectId !== void 0 && input.projectId !== existing.projectId) {
-        const [projExists] = await tx.select().from(projects).where(and2(eq4(projects.id, input.projectId), eq4(projects.userId, ctx.user.id)));
+        const [projExists] = await tx.select().from(projects2).where(and2(eq4(projects2.id, input.projectId), eq4(projects2.userId, ctx.user.id)));
         if (!projExists) {
           throw new TRPCError3({ code: "NOT_FOUND", message: "Target project not found" });
         }
@@ -821,7 +911,7 @@ var taskRouter = createTRPCRouter({
       const movingBetweenProjects = targetProjectId !== existing.projectId;
       const changingStatus = input.status !== void 0 && input.status !== existing.status;
       if (movingBetweenProjects || changingStatus) {
-        const last = await tx.select({ max: sql3`max(${tasks.position})` }).from(tasks).where(and2(eq4(tasks.projectId, targetProjectId), eq4(tasks.status, targetStatus)));
+        const last = await tx.select({ max: sql4`max(${tasks2.position})` }).from(tasks2).where(and2(eq4(tasks2.projectId, targetProjectId), eq4(tasks2.status, targetStatus)));
         updateData.status = targetStatus;
         updateData.position = (last[0]?.max ?? -1) + 1;
       } else if (input.status !== void 0) {
@@ -830,11 +920,11 @@ var taskRouter = createTRPCRouter({
       if (input.dueDate !== void 0) {
         updateData.dueDate = input.dueDate ? new Date(input.dueDate) : null;
       }
-      await tx.update(tasks).set(updateData).where(eq4(tasks.id, input.id));
+      await tx.update(tasks2).set(updateData).where(eq4(tasks2.id, input.id));
       if (input.tagIds !== void 0) {
-        await tx.delete(taskTags).where(eq4(taskTags.taskId, input.id));
+        await tx.delete(taskTags2).where(eq4(taskTags2.taskId, input.id));
         if (input.tagIds.length > 0) {
-          await tx.insert(taskTags).values(
+          await tx.insert(taskTags2).values(
             input.tagIds.map((tagId) => ({ taskId: input.id, tagId }))
           );
         }
@@ -860,11 +950,11 @@ var taskRouter = createTRPCRouter({
      DELETE TASK
   --------------------------------------------- */
   delete: protectedProcedure.input(z2.object({ id: z2.number() })).mutation(async ({ ctx, input }) => {
-    const [task] = await ctx.db.select().from(tasks).where(and2(eq4(tasks.id, input.id), eq4(tasks.userId, ctx.user.id)));
+    const [task] = await ctx.db.select().from(tasks2).where(and2(eq4(tasks2.id, input.id), eq4(tasks2.userId, ctx.user.id)));
     if (!task) throw new TRPCError3({ code: "NOT_FOUND" });
     const projectId = task.projectId;
-    await ctx.db.delete(taskTags).where(eq4(taskTags.taskId, input.id));
-    await ctx.db.delete(tasks).where(eq4(tasks.id, input.id));
+    await ctx.db.delete(taskTags2).where(eq4(taskTags2.taskId, input.id));
+    await ctx.db.delete(tasks2).where(eq4(tasks2.id, input.id));
     await recalcProjectProgress(ctx.db, projectId, ctx.user.id);
     sendEmail(
       ctx.user.email,
@@ -879,14 +969,14 @@ var taskRouter = createTRPCRouter({
   getByTagId: protectedProcedure.input(z2.object({ tagId: z2.number() })).query(async ({ ctx, input }) => {
     const { tagId } = input;
     const rows = await ctx.db.select({
-      id: tasks.id,
-      title: tasks.title,
-      description: tasks.description,
-      status: tasks.status,
-      priority: tasks.priority,
-      projectId: tasks.projectId
-    }).from(taskTags).innerJoin(tasks, eq4(taskTags.taskId, tasks.id)).where(
-      and2(eq4(taskTags.tagId, tagId), eq4(tasks.userId, ctx.user.id))
+      id: tasks2.id,
+      title: tasks2.title,
+      description: tasks2.description,
+      status: tasks2.status,
+      priority: tasks2.priority,
+      projectId: tasks2.projectId
+    }).from(taskTags2).innerJoin(tasks2, eq4(taskTags2.taskId, tasks2.id)).where(
+      and2(eq4(taskTags2.tagId, tagId), eq4(tasks2.userId, ctx.user.id))
     );
     return rows;
   }),
@@ -896,16 +986,16 @@ var taskRouter = createTRPCRouter({
   reorder: protectedProcedure.input(reorderSchema).mutation(async ({ ctx, input }) => {
     try {
       const { projectId, items } = input;
-      const [projectExists] = await ctx.db.select().from(projects).where(and2(eq4(projects.id, projectId), eq4(projects.userId, ctx.user.id)));
+      const [projectExists] = await ctx.db.select().from(projects2).where(and2(eq4(projects2.id, projectId), eq4(projects2.userId, ctx.user.id)));
       if (!projectExists) {
         throw new TRPCError3({ code: "NOT_FOUND" });
       }
       const ids = items.map((i) => i.id);
-      const dbTasks = await ctx.db.select().from(tasks).where(
+      const dbTasks = await ctx.db.select().from(tasks2).where(
         and2(
-          sql3`${tasks.id} IN (${sql3.join(ids, sql3`,`)})`,
-          eq4(tasks.userId, ctx.user.id),
-          eq4(tasks.projectId, projectId)
+          sql4`${tasks2.id} IN (${sql4.join(ids, sql4`,`)})`,
+          eq4(tasks2.userId, ctx.user.id),
+          eq4(tasks2.projectId, projectId)
         )
       );
       if (dbTasks.length !== items.length) {
@@ -913,11 +1003,11 @@ var taskRouter = createTRPCRouter({
       }
       await ctx.db.transaction(async (tx) => {
         for (const item of items) {
-          await tx.update(tasks).set({
+          await tx.update(tasks2).set({
             status: item.status,
             position: item.position,
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq4(tasks.id, item.id));
+          }).where(eq4(tasks2.id, item.id));
         }
         await recalcProjectProgress(tx, projectId, ctx.user.id);
       });
@@ -933,7 +1023,7 @@ var taskRouter = createTRPCRouter({
 });
 
 // _core/projectRouter.ts
-import { eq as eq5, and as and3, desc, asc as asc2, sql as sql4, inArray } from "drizzle-orm";
+import { eq as eq5, and as and3, desc, asc as asc2, sql as sql5, inArray } from "drizzle-orm";
 import { TRPCError as TRPCError4 } from "@trpc/server";
 var projectRouter = createTRPCRouter({
   // Mount task router
@@ -951,7 +1041,7 @@ var projectRouter = createTRPCRouter({
       // 👇 owner name
       ownerName: users.name,
       // 👇 task count
-      taskCount: sql4`COUNT(${tasks.id})`.mapWith(Number)
+      taskCount: sql5`COUNT(${tasks.id})`.mapWith(Number)
     }).from(projects).leftJoin(users, eq5(projects.userId, users.id)).leftJoin(tasks, eq5(tasks.projectId, projects.id)).where(eq5(projects.userId, ctx.user.id)).groupBy(projects.id, users.name).orderBy(desc(projects.createdAt));
     return data;
   }),
@@ -968,7 +1058,7 @@ var projectRouter = createTRPCRouter({
       createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
       // ➜ Ambil nama owner dari table users
-      ownerName: sql4`(
+      ownerName: sql5`(
           SELECT name FROM users WHERE users.id = ${projects.userId}
         )`
     }).from(projects).where(
@@ -985,9 +1075,9 @@ var projectRouter = createTRPCRouter({
   /* ---------------------- DASHBOARD STATS ---------------------- */
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user.id;
-    const [{ count: totalProjects }] = await ctx.db.select({ count: sql4`COUNT(*)` }).from(projects).where(eq5(projects.userId, userId));
-    const [{ count: totalTasks }] = await ctx.db.select({ count: sql4`COUNT(*)` }).from(tasks).where(eq5(tasks.userId, userId));
-    const [{ count: completedTasks }] = await ctx.db.select({ count: sql4`COUNT(*)` }).from(tasks).where(and3(eq5(tasks.userId, userId), eq5(tasks.status, "completed")));
+    const [{ count: totalProjects }] = await ctx.db.select({ count: sql5`COUNT(*)` }).from(projects).where(eq5(projects.userId, userId));
+    const [{ count: totalTasks }] = await ctx.db.select({ count: sql5`COUNT(*)` }).from(tasks).where(eq5(tasks.userId, userId));
+    const [{ count: completedTasks }] = await ctx.db.select({ count: sql5`COUNT(*)` }).from(tasks).where(and3(eq5(tasks.userId, userId), eq5(tasks.status, "completed")));
     return {
       projects: totalProjects,
       tasks: totalTasks,
@@ -1229,7 +1319,7 @@ var systemRouter = router({
 
 // _core/tagRouter.ts
 import { z as z5 } from "zod";
-import { eq as eq6, and as and4, desc as desc2, sql as sql5 } from "drizzle-orm";
+import { eq as eq6, and as and4, desc as desc2, sql as sql6 } from "drizzle-orm";
 import { TRPCError as TRPCError6 } from "@trpc/server";
 var tagRouter = createTRPCRouter({
   // -----------------------------------------------------
@@ -1244,7 +1334,7 @@ var tagRouter = createTRPCRouter({
       color: tags.color,
       createdAt: tags.createdAt,
       // hitung jumlah task yang pakai tag ini
-      usageCount: sql5`
+      usageCount: sql6`
           (SELECT COUNT(*)
            FROM ${taskTags}
            WHERE ${taskTags.tagId} = ${tags.id})
@@ -1332,7 +1422,7 @@ var tagRouter = createTRPCRouter({
     if (existing) return { success: true };
     await ctx.db.transaction(async (tx) => {
       await tx.insert(taskTags).values({ taskId, tagId });
-      await tx.update(tags).set({ usageCount: sql5`usage_count + 1` }).where(eq6(tags.id, tagId));
+      await tx.update(tags).set({ usageCount: sql6`usage_count + 1` }).where(eq6(tags.id, tagId));
     });
     return { success: true };
   }),
@@ -1350,7 +1440,7 @@ var tagRouter = createTRPCRouter({
     if (!existing) return { success: true };
     await ctx.db.transaction(async (tx) => {
       await tx.delete(taskTags).where(and4(eq6(taskTags.taskId, taskId), eq6(taskTags.tagId, tagId)));
-      await tx.update(tags).set({ usageCount: sql5`GREATEST(usage_count - 1, 0)` }).where(eq6(tags.id, tagId));
+      await tx.update(tags).set({ usageCount: sql6`GREATEST(usage_count - 1, 0)` }).where(eq6(tags.id, tagId));
     });
     return { success: true };
   })
@@ -1548,7 +1638,7 @@ async function startServer() {
   }
   const port = 3e3;
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+    console.log(`Server running`);
   });
 }
 startServer().catch(console.error);

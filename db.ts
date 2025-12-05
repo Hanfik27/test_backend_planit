@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { InsertUser, users } from "../drizzle/schema";
-import * as schema from "../drizzle/schema";
+import { InsertUser, users } from "./drizzle/schema";
+import * as schema from "./drizzle/schema";
 import { ENV } from "./_core/env";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -63,13 +63,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     role: user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : undefined),
   };
 
-  await db
-    .insert(users)
-    .values(values)
-    .onConflictDoUpdate({
-      target: users.openId,
-      set: updateSet,
-    });
+  await db.insert(users).values(values).onConflictDoUpdate({
+    target: users.openId,
+    set: updateSet,
+  });
 }
 
 export async function getUserByOpenId(openId: string) {

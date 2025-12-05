@@ -1,7 +1,7 @@
 // Preconfigured storage helpers for Manus WebDev templates
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
-import { ENV } from './_core/env';
+import { ENV } from "./_core/env";
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
@@ -38,7 +38,7 @@ async function buildDownloadUrl(
     method: "GET",
     headers: buildAuthHeaders(apiKey),
   });
-  return (await response.json()).url;
+  return ((await response.json()) as { url: string }).url;
 }
 
 function ensureTrailingSlash(value: string): string {
@@ -63,7 +63,7 @@ function toFormData(
   return form;
 }
 
-function buildAuthHeaders(apiKey: string): HeadersInit {
+function buildAuthHeaders(apiKey: string): Record<string, string> {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
@@ -88,11 +88,13 @@ export async function storagePut(
       `Storage upload failed (${response.status} ${response.statusText}): ${message}`
     );
   }
-  const url = (await response.json()).url;
+  const url = ((await response.json()) as { url: string }).url;
   return { key, url };
 }
 
-export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
+export async function storageGet(
+  relKey: string
+): Promise<{ key: string; url: string }> {
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   return {

@@ -4,13 +4,11 @@
 import { z } from "zod";
 import { taskRouter } from "./taskRouter";
 import { createTRPCRouter, protectedProcedure } from "./trpc";
-import { projects, tasks, tags, taskTags } from "../../drizzle/schema";
+import { projects, tasks, tags, taskTags } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { recalcProjectProgress } from "./progress"; // ✅ FIXED: No circular import
-import { users } from "../../drizzle/schema";
-
-
+import { users } from "../drizzle/schema";
 
 /* ------------------------------------------------------
    PROJECT ROUTER
@@ -19,72 +17,68 @@ export const projectRouter = createTRPCRouter({
   // Mount task router
   task: taskRouter,
 
- /* ---------------------- GET ALL PROJECTS + ownerName + taskCount ---------------------- */
-getAll: protectedProcedure.query(async ({ ctx }) => {
-  const data = await ctx.db
-    .select({
-      id: projects.id,
-      name: projects.name,
-      description: projects.description,
-      status: projects.status,
-      progress: projects.progress,
-      color: projects.color,
-      createdAt: projects.createdAt,
-
-      // 👇 owner name
-      ownerName: users.name,
-
-      // 👇 task count
-      taskCount: sql<number>`COUNT(${tasks.id})`.mapWith(Number),
-    })
-    .from(projects)
-    .leftJoin(users, eq(projects.userId, users.id))
-    .leftJoin(tasks, eq(tasks.projectId, projects.id))
-    .where(eq(projects.userId, ctx.user.id))
-    .groupBy(projects.id, users.name)
-    .orderBy(desc(projects.createdAt));
-
-
-  return data;
-}),
-
-  /* ---------------------- GET PROJECT BY ID ---------------------- */
-getById: protectedProcedure
-  .input(z.object({ id: z.number() }))
-  .query(async ({ ctx, input }) => {
-
-    const [project] = await ctx.db
+  /* ---------------------- GET ALL PROJECTS + ownerName + taskCount ---------------------- */
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    const data = await ctx.db
       .select({
         id: projects.id,
-        userId: projects.userId,
         name: projects.name,
         description: projects.description,
         status: projects.status,
         progress: projects.progress,
         color: projects.color,
         createdAt: projects.createdAt,
-        updatedAt: projects.updatedAt,
 
-        // ➜ Ambil nama owner dari table users
-        ownerName: sql<string>`(
-          SELECT name FROM users WHERE users.id = ${projects.userId}
-        )`,
+        // 👇 owner name
+        ownerName: users.name,
+
+        // 👇 task count
+        taskCount: sql<number>`COUNT(${tasks.id})`.mapWith(Number),
       })
       .from(projects)
-      .where(
-        and(eq(projects.id, input.id), eq(projects.userId, ctx.user.id))
-      )
-      .limit(1);
+      .leftJoin(users, eq(projects.userId, users.id))
+      .leftJoin(tasks, eq(tasks.projectId, projects.id))
+      .where(eq(projects.userId, ctx.user.id))
+      .groupBy(projects.id, users.name)
+      .orderBy(desc(projects.createdAt));
 
-    if (!project) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Project not found",
-      });
-    }
-
-    return project;
+    return data;
   }),
+
+  /* ---------------------- GET PROJECT BY ID ---------------------- */
+  getById: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const [project] = await ctx.db
+        .select({
+          id: projects.id,
+          userId: projects.userId,
+          name: projects.name,
+          description: projects.description,
+          status: projects.status,
+          progress: projects.progress,
+          color: projects.color,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+
+          // ➜ Ambil nama owner dari table users
+          ownerName: sql<string>`(
+          SELECT name FROM users WHERE users.id = ${projects.userId}
+        )`,
+        })
+        .from(projects)
+        .where(and(eq(projects.id, input.id), eq(projects.userId, ctx.user.id)))
+        .limit(1);
+
+      if (!project) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
+      return project;
+    }),
 
   /* ---------------------- DASHBOARD STATS ---------------------- */
   getStats: protectedProcedure.query(async ({ ctx }) => {
@@ -127,7 +121,7 @@ getById: protectedProcedure
         )
         .orderBy(asc(tasks.position));
 
-      const ids = list.map((t) => t.id);
+      const ids = list.map(t => t.id);
       if (ids.length === 0) return [];
 
       const tagRows = await ctx.db
@@ -142,7 +136,7 @@ getById: protectedProcedure
         .where(inArray(taskTags.taskId, ids));
 
       const grouped: Record<number, any[]> = {};
-      tagRows.forEach((t) => {
+      tagRows.forEach(t => {
         if (!grouped[t.taskId]) grouped[t.taskId] = [];
         grouped[t.taskId].push({
           id: t.id,
@@ -151,7 +145,7 @@ getById: protectedProcedure
         });
       });
 
-      return list.map((t) => ({
+      return list.map(t => ({
         ...t,
         tags: grouped[t.id] ?? [],
       }));
@@ -193,38 +187,34 @@ getById: protectedProcedure
     }),
 
   /* ---------------------- UPDATE PROJECT ---------------------- */
-update: protectedProcedure
-  .input(
-    z.object({
-      id: z.number(),
-      name: z.string().min(1),
-      description: z.string().optional(),
-      status: z.enum(["active", "completed", "archived"]),
-      progress: z.number().min(0).max(100),
-      color: z.string(),
-    })
-  )
-  .mutation(async ({ ctx, input }) => {
-    await ctx.db
-      .update(projects)
-      .set({
-        name: input.name,
-        description: input.description ?? "",
-        status: input.status,
-        progress: input.progress,
-        color: input.color,
-        updatedAt: new Date(),
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        status: z.enum(["active", "completed", "archived"]),
+        progress: z.number().min(0).max(100),
+        color: z.string(),
       })
-      .where(
-  and(
-    eq(projects.id, input.id),
-    eq(projects.userId, ctx.user.id)
-  )
-);
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(projects)
+        .set({
+          name: input.name,
+          description: input.description ?? "",
+          status: input.status,
+          progress: input.progress,
+          color: input.color,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(projects.id, input.id), eq(projects.userId, ctx.user.id))
+        );
 
-
-    return { success: true };
-  }),
+      return { success: true };
+    }),
 
   /* ---------------------- DELETE PROJECT ---------------------- */
   delete: protectedProcedure

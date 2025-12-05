@@ -5,12 +5,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./cookies";
-import { users } from "../../drizzle/schema";
+import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const authRouter = createTRPCRouter({
-
   // ===========================
   // REGISTER
   // ===========================
@@ -24,10 +23,17 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const db = ctx.db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "DB not available",
+        });
 
       if (!process.env.JWT_SECRET) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "JWT_SECRET not configured" });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "JWT_SECRET not configured",
+        });
       }
 
       const email = input.email.toLowerCase().trim();
@@ -39,7 +45,10 @@ export const authRouter = createTRPCRouter({
         .limit(1);
 
       if (existing) {
-        throw new TRPCError({ code: "CONFLICT", message: "Email already in use" });
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Email already in use",
+        });
       }
 
       const hashed = await bcrypt.hash(input.password, 12);
@@ -70,10 +79,17 @@ export const authRouter = createTRPCRouter({
     .input(z.object({ email: z.string().email(), password: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = ctx.db;
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "DB not available",
+        });
 
       if (!process.env.JWT_SECRET) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "JWT_SECRET not configured" });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "JWT_SECRET not configured",
+        });
       }
 
       const email = input.email.toLowerCase().trim();
@@ -85,11 +101,18 @@ export const authRouter = createTRPCRouter({
         .limit(1);
 
       if (!user || !user.password) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid email or password",
+        });
       }
 
       const valid = await bcrypt.compare(input.password, user.password);
-      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+      if (!valid)
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid email or password",
+        });
 
       const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
         expiresIn: "7d",
@@ -166,13 +189,22 @@ export const authRouter = createTRPCRouter({
         .limit(1);
 
       if (!fullUser || !fullUser.password) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "User not found" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not found",
+        });
       }
 
       // Validate current password
-      const valid = await bcrypt.compare(input.currentPassword, fullUser.password);
+      const valid = await bcrypt.compare(
+        input.currentPassword,
+        fullUser.password
+      );
       if (!valid) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Current password is incorrect" });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Current password is incorrect",
+        });
       }
 
       // Hash new password
